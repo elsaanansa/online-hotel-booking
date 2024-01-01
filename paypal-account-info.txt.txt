@@ -1,0 +1,29 @@
+Developer Account:
+Email: hotelbooking07@gmail.com
+Password: TheBigHotel77
+https://www.sandbox.paypal.com/signin
+
+Sandbox - Personal:
+sb-ilujt27954473@personal.example.com
+Password: TheBigHotel77
+
+Sandbox - Business:
+sb-cw0tw27896987@business.example.com
+Password: TheBigHotel77
+
+API Credential:
+APP Name: HOTELAPPNEW
+sb-cw0tw27896987@business.example.com (HOTELAPPNEW)
+Client ID: AaR8k2STvMZivADX5EaWp4akx-9y_o-RN8zcrMEOUIKDGlLssTfDIr2v_0bHQesKeyZsMlQ8FhjrfOer
+Secret: EGCIh5WeW6SNX0iiPnQuFbAC3AD0oD7EZOzOf92qOMk9r3wcIJ0MIKqK3mbelBf7kzFO1_Eelw9u_xP_
+
+
+
+================
+STRIPE
+
+Publish Key
+pk_test_51O8gHyGMon457AwDJ98dxEsdMxcdG96C0KyySqECBZ5yg1JAQaOYXMdeTTIP4lvsWTiupPvXL2aIQjyluhFGdQeR00uyIemWQE
+
+Secret Key
+sk_test_51O8gHyGMon457AwD691iiqA3hCn6OO9ZUU4db5LbdgMh5H6YhRxSeRYVqfhtIiYuIooRxKVxXUnZN1jFSF0yE4JQ00zwPQx0WZ
