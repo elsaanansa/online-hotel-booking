@@ -2,27 +2,42 @@
 
 namespace App\Http\Controllers\Front;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\Customer;
-use App\Models\OrderDetail;
-use App\Models\Order;
-use App\Models\BookedRoom;
+use Stripe;
+use Stripe\Charge;
 use App\Models\Room;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\Websitemail;
+use App\Models\Order;
 use PayPal\Api\Amount;
 use PayPal\Api\Details;
 use PayPal\Api\Payment;
-use PayPal\Api\PaymentExecution;
+use App\Models\Customer;
+use App\Mail\Websitemail;
+use App\Models\BookedRoom;
+use App\Models\OrderDetail;
+use Illuminate\Support\Str;
 use PayPal\Api\Transaction;
-use Stripe;
+use Illuminate\Http\Request;
+use PayPal\Api\PaymentExecution;
+use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+use Xendit\Configuration;
+use Xendit\Invoice\InvoiceApi;
+use Xendit\Invoice\CreateInvoiceRequest;
+
 
 
 class BookingController extends Controller
 {
+    var $apiInstance = null;
+
+    public function __construct() {
+        Configuration::setXenditKey(env('SECRET_KEY_XENDIT'));
+        $this->apiInstace = new InvoiceApi();
+    }
+
+
     public function cart_submit(Request $request)
     {
 
@@ -79,7 +94,7 @@ class BookingController extends Controller
         session()->push('cart_adult',$request->adult);
         session()->push('cart_children',$request->children);
 
-        return redirect()->back()->with('success', 'Room is added to the cart successfully.');
+        return redirect()->to('/cart')->with('success', 'Room is added to the cart successfully.');
 
     }
 
@@ -122,7 +137,7 @@ class BookingController extends Controller
         return redirect()->back()->with('success', 'Cart item is deleted.');
     }
 
-    
+
 
     public function checkout()
     {
@@ -306,6 +321,8 @@ class BookingController extends Controller
 
         $customer_email = Auth::guard('customer')->user()->email;
 
+
+
         Mail::to( $customer_email)->send(new Websitemail($subject,$message));
 
             session()->forget('cart_room_id');
@@ -424,6 +441,8 @@ class BookingController extends Controller
 
             $customer_email = Auth::guard('customer')->user()->email;
 
+
+
             Mail::to($customer_email)->send(new Websitemail($subject,$message));
 
             session()->forget('cart_room_id');
@@ -442,6 +461,268 @@ class BookingController extends Controller
 
 
         return redirect()->route('home')->with('success', 'Payment is successful');
+    }
+
+    public function manual_payment(Request $request, $price)
+    {
+        $request->validate([
+            'proof_payment' => 'required|image|mimes:jpg,jpeg,png',
+        ]);
+
+            $ext = $request->file('proof_payment')->extension();
+            $final_name = time().'.'.$ext;
+            $request->file('proof_payment')->move(public_path('uploads/'),$final_name);
+
+            $order_no = time();
+            $unique_id = time() . mt_rand() . Auth::guard('customer')->user()->id;
+
+            $statement = DB::select("SHOW TABLE STATUS LIKE 'orders'");
+            $ai_id = $statement[0]->Auto_increment;
+
+            $obj = new Order();
+            $obj->customer_id = Auth::guard('customer')->user()->id;
+            $obj->order_no = $order_no;
+            $obj->transaction_id = $unique_id;
+            $obj->payment_method = 'Manual_payment';
+            $obj->proof_of_payment = $final_name;
+            $obj->paid_amount =  $price;
+            $obj->booking_date = date('d/m/Y');
+            $obj->status = 'Pending';
+            $obj->save();
+
+            $arr_cart_room_id = session()->get('cart_room_id');
+            $arr_cart_checkin_date = session()->get('cart_checkin_date');
+            $arr_cart_checkout_date = session()->get('cart_checkout_date');
+            $arr_cart_adult = session()->get('cart_adult');
+            $arr_cart_children = session()->get('cart_children');
+
+            for($i=0;$i<count($arr_cart_room_id);$i++)
+            {
+
+                $r_info = Room::where('id',$arr_cart_room_id[$i])->first();
+                $d1 = explode('/',$arr_cart_checkin_date[$i]);
+                $d2 = explode('/',$arr_cart_checkout_date[$i]);
+                $d1_new = $d1[2].'-'.$d1[1].'-'.$d1[0];
+                $d2_new = $d2[2].'-'.$d2[1].'-'.$d2[0];
+                $t1 = strtotime($d1_new);
+                $t2 = strtotime($d2_new);
+                $diff = ($t2-$t1)/60/60/24;
+                $sub = $r_info->price*$diff;
+
+                $obj = new OrderDetail();
+                $obj->order_id = $ai_id;
+                $obj->room_id = $arr_cart_room_id[$i];
+                $obj->order_no = $order_no;
+                $obj->checkin_date = $arr_cart_checkin_date[$i];
+                $obj->checkout_date =  $arr_cart_checkout_date[$i];
+                $obj->adult = $arr_cart_adult[$i];
+                $obj->children =  $arr_cart_children[$i];
+                $obj->subtotal = $sub;
+                $obj->save();
+
+
+
+                    while(1) {
+                        if($t1>=$t2) {
+                        break;
+                    }
+
+                    $obj = new BookedRoom();
+                    $obj->booking_date = date('d/m/Y', $t1);
+                    $obj->order_no = $order_no;
+                    $obj->room_id = $arr_cart_room_id[$i];
+                    $obj->save();
+
+                    $t1 =  strtotime('+1 day', $t1);
+
+                    }
+
+                    }
+
+
+
+        $subject = 'New Order';
+        $message = 'You have made an order for hotel booking. The booking information is given below: <br>';
+        $message .= '<br>Order No: '.$order_no;
+        $message .= '<br>Transaction Id: '.$unique_id;
+        $message .= '<br>Payment Method: Manual Payment ';
+        $message .= '<br> Paid Amount; '. $price;
+        $message .= '<br.Booking Date; '.date('d/m/Y').'<br>';
+
+        for($i=0;$i<count($arr_cart_room_id);$i++)
+        {
+            $r_info = Room::where('id',$arr_cart_room_id[$i])->first();
+
+            $message .= '<br>Room Name: '.$r_info->name;
+            $message .= '<br>Price Per Night: Rp. '.$r_info->price;
+            $message .= '<br>Checkin Date: '.$arr_cart_checkin_date[$i];
+            $message .= '<br>Checkout Date: '.$arr_cart_checkout_date[$i];
+            $message .= '<br>Adult: '.$arr_cart_adult[$i];
+            $message .= '<br>Children: '.$arr_cart_children[$i].'<br>';
+
+        }
+
+
+        $customer_email = Auth::guard('customer')->user()->email;
+
+
+
+        Mail::to( $customer_email)->send(new Websitemail($subject,$message));
+
+            session()->forget('cart_room_id');
+            session()->forget('cart_checkin_date');
+            session()->forget('cart_checkout_date');
+            session()->forget('cart_adult');
+            session()->forget('cart_children');
+            session()->forget('billing_name');
+            session()->forget('billing_email');
+            session()->forget('billing_phone');
+            session()->forget('billing_country');
+            session()->forget('billing_address');
+            session()->forget('billing_state');
+            session()->forget('billing_city');
+            session()->forget('billing_zip');
+
+        return redirect()->route('home')->with('pending', 'Payment is pending');
+    }
+
+    public function xendit(Request $request) {
+        $request->validate([
+            'amount' => 'required',
+        ]);
+
+        Configuration::setXenditKey("xnd_public_development_p_yDy_oj7feiJibAmFxMo68EVzi_MwN5BrETDb0cojkP6HtRI0QQ1U78eeywnQsL");
+
+        $apiInstance = new InvoiceApi();
+
+        $create_invoice_request = new CreateInvoiceRequest([
+        'external_id' => 'test1234',
+        'description' => 'Test Invoice',
+        'amount' => 10000,
+        'invoice_duration' => 172800,
+        'currency' => 'IDR',
+        'reminder_time' => 1
+        ]);
+        $for_user_id = "62efe4c33e45694d63f585f0";
+
+        try {
+            $result = $apiInstance->createInvoice($create_invoice_request, $for_user_id);
+        } catch (\Xendit\XenditSdkException $e) {
+            dd($e->getMessage());
+        }
+
+        dd($response);
+
+            $order_no = time();
+
+            $statement = DB::select("SHOW TABLE STATUS LIKE 'orders'");
+            $ai_id = $statement[0]->Auto_increment;
+
+            $obj = new Order();
+            $obj->customer_id = Auth::guard('customer')->user()->id;
+            $obj->order_no = $order_no;
+            $obj->transaction_id = $unique_id;
+            $obj->payment_method = 'Xendit';
+            $obj->payment_link =  $response->invoice_url;
+            $obj->paid_amount =  $price;
+            $obj->booking_date = date('d/m/Y');
+            $obj->status = $response->status;
+            $obj->save();
+
+            $arr_cart_room_id = session()->get('cart_room_id');
+            $arr_cart_checkin_date = session()->get('cart_checkin_date');
+            $arr_cart_checkout_date = session()->get('cart_checkout_date');
+            $arr_cart_adult = session()->get('cart_adult');
+            $arr_cart_children = session()->get('cart_children');
+
+            for($i=0;$i<count($arr_cart_room_id);$i++)
+            {
+
+                $r_info = Room::where('id',$arr_cart_room_id[$i])->first();
+                $d1 = explode('/',$arr_cart_checkin_date[$i]);
+                $d2 = explode('/',$arr_cart_checkout_date[$i]);
+                $d1_new = $d1[2].'-'.$d1[1].'-'.$d1[0];
+                $d2_new = $d2[2].'-'.$d2[1].'-'.$d2[0];
+                $t1 = strtotime($d1_new);
+                $t2 = strtotime($d2_new);
+                $diff = ($t2-$t1)/60/60/24;
+                $sub = $r_info->price*$diff;
+
+                $obj = new OrderDetail();
+                $obj->order_id = $ai_id;
+                $obj->room_id = $arr_cart_room_id[$i];
+                $obj->order_no = $order_no;
+                $obj->checkin_date = $arr_cart_checkin_date[$i];
+                $obj->checkout_date =  $arr_cart_checkout_date[$i];
+                $obj->adult = $arr_cart_adult[$i];
+                $obj->children =  $arr_cart_children[$i];
+                $obj->subtotal = $sub;
+                $obj->save();
+
+
+
+                    while(1) {
+                        if($t1>=$t2) {
+                        break;
+                    }
+
+                    $obj = new BookedRoom();
+                    $obj->booking_date = date('d/m/Y', $t1);
+                    $obj->order_no = $order_no;
+                    $obj->room_id = $arr_cart_room_id[$i];
+                    $obj->save();
+
+                    $t1 =  strtotime('+1 day', $t1);
+
+                    }
+
+                    }
+
+
+
+        $subject = 'New Order';
+        $message = 'You have made an order for hotel booking. The booking information is given below: <br>';
+        $message .= '<br>Order No: '.$order_no;
+        $message .= '<br>Transaction Id: '.$unique_id;
+        $message .= '<br>Payment Method: Xendit ';
+        $message .= '<br> Paid Amount; '. $amount;
+        $message .= '<br.Booking Date; '.date('d/m/Y').'<br>';
+
+        for($i=0;$i<count($arr_cart_room_id);$i++)
+        {
+            $r_info = Room::where('id',$arr_cart_room_id[$i])->first();
+
+            $message .= '<br>Room Name: '.$r_info->name;
+            $message .= '<br>Price Per Night: Rp. '.$r_info->price;
+            $message .= '<br>Checkin Date: '.$arr_cart_checkin_date[$i];
+            $message .= '<br>Checkout Date: '.$arr_cart_checkout_date[$i];
+            $message .= '<br>Adult: '.$arr_cart_adult[$i];
+            $message .= '<br>Children: '.$arr_cart_children[$i].'<br>';
+
+        }
+
+
+        $customer_email = Auth::guard('customer')->user()->email;
+
+
+
+        Mail::to( $customer_email)->send(new Websitemail($subject,$message));
+
+            session()->forget('cart_room_id');
+            session()->forget('cart_checkin_date');
+            session()->forget('cart_checkout_date');
+            session()->forget('cart_adult');
+            session()->forget('cart_children');
+            session()->forget('billing_name');
+            session()->forget('billing_email');
+            session()->forget('billing_phone');
+            session()->forget('billing_country');
+            session()->forget('billing_address');
+            session()->forget('billing_state');
+            session()->forget('billing_city');
+            session()->forget('billing_zip');
+
+        return redirect()->to($response->invoice_url);
     }
 
 }

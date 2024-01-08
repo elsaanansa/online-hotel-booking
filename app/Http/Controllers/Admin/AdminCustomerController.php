@@ -11,7 +11,7 @@ class AdminCustomerController extends Controller
     public function index()
     {
         $customers = Customer::get();
-        return view ('admin.customers');
+        return view ('admin.customers',compact('customers'));
     }
 
     public function change_status($id)

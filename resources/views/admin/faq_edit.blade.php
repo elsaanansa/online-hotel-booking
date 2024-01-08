@@ -15,7 +15,7 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body">
-                    <form action="{{ route('admin_faq_update',$faq_data->id) }}" method="post">
+                    <form action="{{ route('admin_faq_update',$faq_data->id) }}" method="POST">
                         @csrf
                         <div class="row">
                             <div class="col-md-12">

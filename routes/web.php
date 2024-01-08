@@ -64,6 +64,8 @@ Route::post('/payment',[BookingController::class, 'payment'])->name('payment');
 
 Route::get('/payment/paypal/{price}',[BookingController::class, 'paypal'])->name('paypal');
 Route::post('/payment/stripe/{price}',[BookingController::class, 'stripe'])->name('stripe');
+Route::post('/payment/xendit',[BookingController::class, 'xendit'])->name('xendit');
+Route::post('/payment/manual/{price}',[BookingController::class, 'manual_payment'])->name('manual');
 
 Route::get('/admin/login', [AdminLoginController::class, 'index'])->name('admin_login');
 Route::post('/admin/login-submit', [AdminLoginController::class, 'login_submit'])->name('admin_login_submit');

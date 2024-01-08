@@ -20,6 +20,7 @@ return new class extends Migration
             $table->text('transaction_id');
             $table->text('payment_method');
             $table->text('card_last_digit')->nullable();
+            $table->text('proof_of_payment')->nullable();
             $table->text('paid_amount');
             $table->text('booking_date');
             $table->text('status');
