@@ -27,6 +27,8 @@
 
 		$('.paypal').hide();
 	    $('.stripe').hide();
+	    $('.midtrans').hide();
+	    $('.manual').hide();
 
 
 		$('#paymentMethodChange').on('change',function() {
@@ -36,22 +38,27 @@
 		        $('.paypal').show();
 		        $('.stripe').hide();
                 $('.midtrans').hide();
+                $('.manual').hide();
 		    }
 		    else if($('#paymentMethodChange').val() == 'Stripe')
 		    {
-		        $('.paypal').hide();
 		        $('.stripe').show();
+		        $('.paypal').hide();
                 $('.midtrans').hide();
+                $('.manual').hide();
 		    }
 
             else if($('#paymentMethodChange').val() == 'Midtrans')
 		    {
 		        $('.paypal').hide();
 		        $('.stripe').hide();
+		        $('.manual').hide();
                 $('.midtrans').show();
 		    }
-		    else if($('#paymentMethodChange').val() == '')
+		    else if($('#paymentMethodChange').val() == 'Manual')
 		    {
+
+		    	$('.manual').show();
 		    	$('.paypal').hide();
 		        $('.stripe').hide();
                 $('.midtrans').hide();

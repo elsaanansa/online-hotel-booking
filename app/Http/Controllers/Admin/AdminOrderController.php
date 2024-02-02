@@ -32,4 +32,19 @@ class AdminOrderController extends Controller
 
         return redirect()->back()->with('success', 'Order is deleted successfully');
     }
+
+    public function DetailProofOfPayment($id) {
+        $data = Order::where('id', $id)->first();
+
+        return view('admin.detail_proof_of_payment', compact('data'));
+    }
+
+    public function ConfirmManualPayment($id) {
+        $data = Order::where('id', $id)->first();
+
+        $data->status = 'Completed';
+
+        $data->update();
+        return redirect()->route('admin_orders')->with('success', 'Order is update successfully');
+    }
 }
