@@ -86,12 +86,12 @@
                                 <h4>Manual Payment</h4>
                                 <div class="container d-flex mb-1">
 
-                                    <form action="{{route('manual', $dollar_amt)}}" method="post">
+                                    <form action="{{route('manual')}}" method="post" enctype="multipart/form-data">
                                         @csrf
-                                        @method('POST')
                                         <div class="mb-3">
                                             <label for="" class="form-label">Proof of Payment</label>
                                             <input type="file" class="form-control" name="proof_payment"/>
+                                            <input type="hidden" name="paid_amount" value="{{$price_in_rupiah}}">
                                         </div>
                                         <button type="submit" class="btn btn-primary">
                                             Submit
@@ -106,7 +106,7 @@
                                 <h4>Pay with Midtrans</h4>
                                 <form action="{{ route('xendit')}}" method="post">
                                     @csrf
-                                <input type="hidden" name="amount" value="{{ $dollar_amt }}">
+                                <input type="hidden" name="amount" value="{{ $price_in_rupiah }}">
                                 <button type="submit" class="btn btn-primary">Checkout</button>
                                 </form>
                             </div>
@@ -199,7 +199,7 @@
                                     @endforeach
 
                                     <tr>
-                                        <td><b>Total:</b></td>
+                                        <td><b>Total dalam rupiah :</b></td>
                                         <td class="p_price"><b>Rp {{ $total_price }}</b></td>
                                     </tr>
 
@@ -222,7 +222,7 @@
         $client = 'AaR8k2STvMZivADX5EaWp4akx-9y_o-RN8zcrMEOUIKDGlLssTfDIr2v_0bHQesKeyZsMlQ8FhjrfOer';
     @endphp
     <script>
-        console.log({{ $dollar_amt }})
+
         paypal.Button.render({
             env: 'sandbox',
             client: {

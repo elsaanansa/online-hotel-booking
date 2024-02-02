@@ -65,7 +65,7 @@ Route::post('/payment',[BookingController::class, 'payment'])->name('payment');
 Route::get('/payment/paypal/{price}',[BookingController::class, 'paypal'])->name('paypal');
 Route::post('/payment/stripe/{price}',[BookingController::class, 'stripe'])->name('stripe');
 Route::post('/payment/xendit',[BookingController::class, 'xendit'])->name('xendit');
-Route::post('/payment/manual/{price}',[BookingController::class, 'manual_payment'])->name('manual');
+Route::post('/payment/manual',[BookingController::class, 'manual_payment'])->name('manual');
 
 Route::get('/admin/login', [AdminLoginController::class, 'index'])->name('admin_login');
 Route::post('/admin/login-submit', [AdminLoginController::class, 'login_submit'])->name('admin_login_submit');
@@ -118,6 +118,9 @@ Route::group(['middleware' =>['admin:admin']], function(){
     Route::get('/admin/customer/change-status/{id}', [AdminCustomerController::class, 'change_status'])->name('admin_customer_change_status');
 
     Route::get('/admin/order/view', [AdminOrderController::class, 'index'])->name('admin_orders');
+    Route::get('/admin/order/proofofpayment/detail/{id}',[AdminOrderController::class, 'DetailProofOfPayment'])->name('admin_detail_proofofpayment');
+    Route::post('/admin/order/manualpayment/confirm/{id}',[AdminOrderController::class, 'ConfirmManualPayment'])->name('admin_manualpayment_confirm');
+
     Route::get('/admin/order/invoice{id}', [AdminOrderController::class, 'invoice'])->name('admin_invoice');
     Route::get('/admin/order/order{id}', [AdminOrderController::class, 'invoice'])->name('admin_order_delete');
 

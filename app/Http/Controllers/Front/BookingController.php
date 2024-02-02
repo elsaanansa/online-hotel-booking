@@ -11,19 +11,20 @@ use PayPal\Api\Details;
 use PayPal\Api\Payment;
 use App\Models\Customer;
 use App\Mail\Websitemail;
+use Xendit\Configuration;
 use App\Models\BookedRoom;
 use App\Models\OrderDetail;
 use Illuminate\Support\Str;
 use PayPal\Api\Transaction;
 use Illuminate\Http\Request;
+use Xendit\Invoice\InvoiceApi;
 use PayPal\Api\PaymentExecution;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
-use Xendit\Configuration;
-use Xendit\Invoice\InvoiceApi;
+use Illuminate\Support\Facades\Storage;
 use Xendit\Invoice\CreateInvoiceRequest;
 
 
@@ -463,111 +464,95 @@ class BookingController extends Controller
         return redirect()->route('home')->with('success', 'Payment is successful');
     }
 
-    public function manual_payment(Request $request, $price)
+    public function manual_payment(Request $request)
     {
         $request->validate([
-            'proof_payment' => 'required|image|mimes:jpg,jpeg,png',
+            'proof_payment' => 'required|image|mimes:jpg,jpeg,png,gif',
+            'paid_amount' => 'required',
         ]);
 
-            $ext = $request->file('proof_payment')->extension();
-            $final_name = time().'.'.$ext;
-            $request->file('proof_payment')->move(public_path('uploads/'),$final_name);
+        $imageName = time().'.'.$request->proof_payment->extension();
+        $uploadedImage = $request->proof_payment->storeAs('public/proof_payment', $imageName);
+        $imagePath = 'storage/proof_payment/' . $imageName;
 
-            $order_no = time();
-            $unique_id = time() . mt_rand() . Auth::guard('customer')->user()->id;
+        $order_no = time();
 
-            $statement = DB::select("SHOW TABLE STATUS LIKE 'orders'");
-            $ai_id = $statement[0]->Auto_increment;
+        $statement = DB::select("SHOW TABLE STATUS LIKE 'orders'");
+        $ai_id = $statement[0]->Auto_increment;
 
-            $obj = new Order();
-            $obj->customer_id = Auth::guard('customer')->user()->id;
-            $obj->order_no = $order_no;
-            $obj->transaction_id = $unique_id;
-            $obj->payment_method = 'Manual_payment';
-            $obj->proof_of_payment = $final_name;
-            $obj->paid_amount =  $price;
-            $obj->booking_date = date('d/m/Y');
-            $obj->status = 'Pending';
-            $obj->save();
+        $transaction_id = Str::uuid();
 
-            $arr_cart_room_id = session()->get('cart_room_id');
-            $arr_cart_checkin_date = session()->get('cart_checkin_date');
-            $arr_cart_checkout_date = session()->get('cart_checkout_date');
-            $arr_cart_adult = session()->get('cart_adult');
-            $arr_cart_children = session()->get('cart_children');
+        $final_price = $request->paid_amount;
 
-            for($i=0;$i<count($arr_cart_room_id);$i++)
-            {
+        $obj = new Order();
+        $obj->customer_id = Auth::guard('customer')->user()->id;
+        $obj->order_no = $order_no;
+        $obj->transaction_id = $transaction_id;
+        $obj->payment_method = 'Manual';
+        $obj->paid_amount =  $request->paid_amount;
+        $obj->booking_date = date('d/m/Y');
+        $obj->proof_of_payment = $imagePath;
+        $obj->status = 'Pending';
+        $obj->save();
 
-                $r_info = Room::where('id',$arr_cart_room_id[$i])->first();
-                $d1 = explode('/',$arr_cart_checkin_date[$i]);
-                $d2 = explode('/',$arr_cart_checkout_date[$i]);
-                $d1_new = $d1[2].'-'.$d1[1].'-'.$d1[0];
-                $d2_new = $d2[2].'-'.$d2[1].'-'.$d2[0];
-                $t1 = strtotime($d1_new);
-                $t2 = strtotime($d2_new);
-                $diff = ($t2-$t1)/60/60/24;
-                $sub = $r_info->price*$diff;
-
-                $obj = new OrderDetail();
-                $obj->order_id = $ai_id;
-                $obj->room_id = $arr_cart_room_id[$i];
-                $obj->order_no = $order_no;
-                $obj->checkin_date = $arr_cart_checkin_date[$i];
-                $obj->checkout_date =  $arr_cart_checkout_date[$i];
-                $obj->adult = $arr_cart_adult[$i];
-                $obj->children =  $arr_cart_children[$i];
-                $obj->subtotal = $sub;
-                $obj->save();
-
-
-
-                    while(1) {
-                        if($t1>=$t2) {
-                        break;
-                    }
-
-                    $obj = new BookedRoom();
-                    $obj->booking_date = date('d/m/Y', $t1);
-                    $obj->order_no = $order_no;
-                    $obj->room_id = $arr_cart_room_id[$i];
-                    $obj->save();
-
-                    $t1 =  strtotime('+1 day', $t1);
-
-                    }
-
-                    }
-
-
-
-        $subject = 'New Order';
-        $message = 'You have made an order for hotel booking. The booking information is given below: <br>';
-        $message .= '<br>Order No: '.$order_no;
-        $message .= '<br>Transaction Id: '.$unique_id;
-        $message .= '<br>Payment Method: Manual Payment ';
-        $message .= '<br> Paid Amount; '. $price;
-        $message .= '<br.Booking Date; '.date('d/m/Y').'<br>';
+        $arr_cart_room_id = session()->get('cart_room_id');
+        $arr_cart_checkin_date = session()->get('cart_checkin_date');
+        $arr_cart_checkout_date = session()->get('cart_checkout_date');
+        $arr_cart_adult = session()->get('cart_adult');
+        $arr_cart_children = session()->get('cart_children');
 
         for($i=0;$i<count($arr_cart_room_id);$i++)
         {
             $r_info = Room::where('id',$arr_cart_room_id[$i])->first();
+            $d1 = explode('/',$arr_cart_checkin_date[$i]);
+            $d2 = explode('/',$arr_cart_checkout_date[$i]);
+            $d1_new = $d1[2].'-'.$d1[1].'-'.$d1[0];
+            $d2_new = $d2[2].'-'.$d2[1].'-'.$d2[0];
+            $t1 = strtotime($d1_new);
+            $t2 = strtotime($d2_new);
+            $diff = ($t2-$t1)/60/60/24;
+            $sub = $r_info->price*$diff;
 
-            $message .= '<br>Room Name: '.$r_info->name;
-            $message .= '<br>Price Per Night: Rp. '.$r_info->price;
-            $message .= '<br>Checkin Date: '.$arr_cart_checkin_date[$i];
-            $message .= '<br>Checkout Date: '.$arr_cart_checkout_date[$i];
-            $message .= '<br>Adult: '.$arr_cart_adult[$i];
-            $message .= '<br>Children: '.$arr_cart_children[$i].'<br>';
-
+            $obj = new OrderDetail();
+            $obj->order_id = $ai_id;
+            $obj->room_id = $arr_cart_room_id[$i];
+            $obj->order_no = $order_no;
+            $obj->checkin_date = $arr_cart_checkin_date[$i];
+            $obj->checkout_date =  $arr_cart_checkout_date[$i];
+            $obj->adult = $arr_cart_adult[$i];
+            $obj->children =  $arr_cart_children[$i];
+            $obj->subtotal = $sub;
+            $obj->save();
         }
 
 
-        $customer_email = Auth::guard('customer')->user()->email;
+
+            $subject = 'New Order';
+            $message = 'Yo have made an order fo hotel booking. The booking information is given below: <br>';
+            $message .= '<br>Order No: '.$order_no;
+            $message .= '<br>Transaction Id: '.$transaction_id;
+            $message .= '<br>Payment Method: Stripe';
+            $message .= '<br>Paid Amount: '.$final_price;
+            $message .= '<br>Booking Date: '.date('d/m/y').'<br>';
+
+
+            for($i=0;$i<count($arr_cart_room_id);$i++){
+
+                $r_info = Room::where('id',$arr_cart_room_id[$i])->first();
+
+                $message .= '<br>Room Name: '.$r_info->name;
+                $message .= '<br>Price Per Night: Rp. '.$r_info->price;
+                $message .= '<br>Checkin Date: '.$arr_cart_checkin_date[$i];
+                $message .= '<br>Checkout Date: '.$arr_cart_checkout_date[$i];
+                $message .= '<br>Adult: '.$arr_cart_adult[$i];
+                $message .= '<br>Children: '.$arr_cart_children[$i].'<br>';
+            }
+
+            $customer_email = Auth::guard('customer')->user()->email;
 
 
 
-        Mail::to( $customer_email)->send(new Websitemail($subject,$message));
+            // Mail::to($customer_email)->send(new Websitemail($subject,$message));
 
             session()->forget('cart_room_id');
             session()->forget('cart_checkin_date');
@@ -583,7 +568,10 @@ class BookingController extends Controller
             session()->forget('billing_city');
             session()->forget('billing_zip');
 
-        return redirect()->route('home')->with('pending', 'Payment is pending');
+
+
+            return redirect(route('home'))->with('success', 'Added!');
+
     }
 
     public function xendit(Request $request) {
@@ -611,7 +599,7 @@ class BookingController extends Controller
             dd($e->getMessage());
         }
 
-        dd($response);
+
 
             $order_no = time();
 

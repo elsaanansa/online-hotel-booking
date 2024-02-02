@@ -22,7 +22,8 @@ class CustomerOrderController extends Controller
 
     {
         $order = Order::where('id',$id)->first();
-        $order_detail = OrderDetail::where('order_id',$id)->get();
+        $order_detail = OrderDetail::where('order_no',$order->order_no)->get();
+        
         return view('customer.invoice', compact('order','order_detail'));
     }
 }
